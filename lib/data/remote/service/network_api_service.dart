@@ -7,18 +7,28 @@ import 'package:tetranos_template/data/remote/exceptions/api_exceptions.dart';
 import 'package:tetranos_template/data/remote/service/base_api_service.dart';
 import 'package:tetranos_template/res/Api/api_client.dart';
 import '../../../dependency_injection/di.dart';
+import '../../local/shared_preference_manager.dart';
 
 class ApiService extends BaseApiService{
 
   ApiClient apiClient = sl.get<ApiClient>();
+  SharedPreferenceManager sharedPreferenceManager = sl.get<SharedPreferenceManager>();
 
   @override
-  Future getApiResponse(String url) async{
+  Future getApiResponse(String url, {bool? token}) async{
     dynamic responseJson;
     try{
-      /*final response = await apiClient.httpClient.get(url);
-      responseJson = returnResponse(response);*/
-      final response = await get(Uri.parse(url));
+
+      dynamic headers = token==null?{
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+
+      }:{
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Authorization':"Bearer ${sharedPreferenceManager.getAccessToken()}"
+      };
+      final response = await get(Uri.parse(url), headers: headers);
       responseJson = returnResponse(response);
     }on SocketException{
       throw FetchDataExceptions(message: 'No Internet Connection');
@@ -31,26 +41,53 @@ class ApiService extends BaseApiService{
   }
 
   @override
-  Future postApiResponse(String url, dynamic data) async{
+  Future postApiResponse(String url, dynamic data, {bool? token}) async{
+
     dynamic responseJson;
+
     try{
-      final response = await post(Uri.parse(url), body: data).timeout(const Duration(seconds: 30));
+      dynamic headers = token==null?{
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+
+      }:{
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Authorization':"Bearer ${sharedPreferenceManager.getAccessToken()}"
+      };
+
+      final response = await post(Uri.parse(url), body: data, headers: headers).timeout(const Duration(seconds: 30));
+      print(response.body);
       responseJson = returnResponse(response);
     }on SocketException{
       throw FetchDataExceptions(message: 'No Internet Connection');
     }
+    on FormatException{
+      throw FetchDataExceptions(message: 'Format Exception');
+    }
     catch(e){
-      throw FetchDataExceptions(message: 'Error During Communication');
+      print(e);
+      throw e;
     }
     return responseJson;
   }
 
   @override
-  Future postWithFiles(String url, dynamic data, Map<String,File> files) async {
+  Future postWithFiles(String url, dynamic data, Map<String,File> files, {bool? token}) async {
     dynamic responseJson;
     try {
+      dynamic headers = token==null?{
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+
+      }:{
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Authorization':"Bearer ${sharedPreferenceManager.getAccessToken()}"
+      };
       var request = MultipartRequest('POST', Uri.parse(url));
       request.fields.addAll(data);
+      request.headers.addAll(headers);
 
       files.forEach((key, value) async{
         String fieldName = key; // Modify this according to your API's expected file field name
@@ -90,6 +127,9 @@ class ApiService extends BaseApiService{
   dynamic returnResponse(Response response){
     switch(response.statusCode){
       case 200:
+        dynamic responseJson = jsonDecode(response.body);
+        return responseJson;
+      case 201:
         dynamic responseJson = jsonDecode(response.body);
         return responseJson;
       default:
